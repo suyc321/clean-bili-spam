@@ -1,0 +1,149 @@
+.demo-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 20px 10px;
+}
+
+.demo-eyebrow {
+  margin: 0 0 6px;
+  color: #00aeec;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.demo-header h1 {
+  margin: 0;
+  font-size: 26px;
+}
+
+.demo-note {
+  max-width: 640px;
+  margin: 10px 0 0;
+  color: #61666d;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.demo-summary {
+  min-width: 320px;
+  padding: 14px 16px;
+  border: 1px solid #e3e5e7;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.demo-summary h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+#summary {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary-row {
+  padding: 9px 0;
+  border-top: 1px solid #f1f2f3;
+}
+
+.summary-row:first-child {
+  border-top: 0;
+}
+
+.summary-row strong {
+  font-size: 13px;
+}
+
+.summary-score {
+  display: block;
+  margin: 3px 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-high .summary-score {
+  color: #c9343f;
+}
+
+.summary-suspicious .summary-score {
+  color: #b56b00;
+}
+
+.summary-low .summary-score {
+  color: #168a52;
+}
+
+.summary-row p {
+  margin: 0;
+  color: #61666d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.demo-feed {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 1100px;
+  margin: 18px auto 60px;
+  padding: 0 20px;
+}
+
+.demo-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #e3e5e7;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.demo-cover {
+  position: relative;
+  display: grid;
+  aspect-ratio: 16 / 10;
+  place-items: center;
+  background: linear-gradient(135deg, #dceafc, #f2f6fb);
+}
+
+.demo-cover-text {
+  color: #9499a0;
+  font-size: 12px;
+}
+
+.demo-cover a {
+  position: absolute;
+  inset: 0;
+}
+
+.demo-card-body {
+  padding: 10px 12px 12px;
+}
+
+.demo-title {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.demo-meta {
+  margin: 6px 0 0;
+  color: #9499a0;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .demo-header {
+    flex-direction: column;
+  }
+
+  .demo-feed {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <title>Icon: full-bleed shield, red/white split, play triangle, dark outline</title>
+  <defs>
+    <clipPath id="shield">
+      <path d="M64 10 L114 25 V58 C114 88 92 106 64 118 C36 106 14 88 14 58 V25 Z"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#shield)">
+    <rect x="14" y="10" width="50" height="108" fill="#E5383B"/>
+    <rect x="64" y="10" width="50" height="108" fill="#F4F5F7"/>
+  </g>
+  <!-- dark outline keeps the white half visible on light toolbars -->
+  <path d="M64 10 L114 25 V58 C114 88 92 106 64 118 C36 106 14 88 14 58 V25 Z" fill="none" stroke="#2B2F3A" stroke-width="10" stroke-linejoin="round"/>
+  <!-- play triangle = video content -->
+  <path d="M51 42 L51 84 L88 63 Z" fill="#2B2F3A" stroke="#2B2F3A" stroke-width="5" stroke-linejoin="round"/>
+</svg>

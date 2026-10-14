@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>脱敏首页夹具</title>
+  </head>
+  <body>
+    <!--
+      脱敏 B 站首页夹具：类名与真实首页一致（.bili-video-card 结构），
+      数据全部为虚构。通过 CDP Fetch 拦截替换 https://www.bilibili.com/
+      的文档响应，让真实扩展在确定性的 DOM 上完成全链路验证。
+
+      卡片布局刻意覆盖触发器判定的四类场景，供 e2e-fixture.mjs 断言：
+        · UID 100200300 数码揭秘君  —— 普通账号，两卡、标题无特征
+        · UID 100200301 资源分享君  —— 标题兜售成套可下载物料（resource-trafficking）
+        · UID 100200302 切片君A    ┐
+        · UID 100200303 切片君B    ┘ 两个不同账号发同一个 BV（reposted-video）
+        · UID 100200304 爆肝君    —— 5 条投稿全在 24 小时窗口内（burst-posting）
+        · 无作者卡                  —— 解析不出 UID，不应挂徽章
+
+      注意：首页适配器不读简介（只有 UP 主主页适配器会读 .sign），
+      因此 repost-disclaimer 触发器在本夹具上不可能命中——这是符合设计的，
+      space 夹具专门覆盖它。
+    -->
+    <div class="feed">
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00001" title="这款手机的散热设计有点意思"></a>
+        <div class="bili-video-card__info--tit" title="这款手机的散热设计有点意思">这款手机的散热设计有点意思</div>
+        <div class="bili-video-card__info--date">2小时前</div>
+        <span class="bili-video-card__stats--text">27.5万</span>
+        <span class="bili-video-card__stats--text">88</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200300">
+          <span class="bili-video-card__info--author" title="数码揭秘君">数码揭秘君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00002" title="实测三款百元耳机的听感差异"></a>
+        <div class="bili-video-card__info--tit" title="实测三款百元耳机的听感差异">实测三款百元耳机的听感差异</div>
+        <div class="bili-video-card__info--date">5小时前</div>
+        <span class="bili-video-card__stats--text">18.2万</span>
+        <span class="bili-video-card__stats--text">102</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200300">
+          <span class="bili-video-card__info--author" title="数码揭秘君">数码揭秘君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00003" title="某某课程L系列全套完整版 视频+字幕"></a>
+        <div class="bili-video-card__info--tit" title="某某课程L系列全套完整版 视频+字幕">某某课程L系列全套完整版 视频+字幕</div>
+        <div class="bili-video-card__info--date">1天前</div>
+        <span class="bili-video-card__stats--text">8,432</span>
+        <span class="bili-video-card__stats--text">612</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200301">
+          <span class="bili-video-card__info--author" title="资源分享君">资源分享君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00004" title="某纪录片 完结版 未删减 网盘自取"></a>
+        <div class="bili-video-card__info--tit" title="某纪录片 完结版 未删减 网盘自取">某纪录片 完结版 未删减 网盘自取</div>
+        <div class="bili-video-card__info--date">1天前</div>
+        <span class="bili-video-card__stats--text">3,120</span>
+        <span class="bili-video-card__stats--text">45</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200301">
+          <span class="bili-video-card__info--author" title="资源分享君">资源分享君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00009" title="热播剧第 12 集 高光片段"></a>
+        <div class="bili-video-card__info--tit" title="热播剧第 12 集 高光片段">热播剧第 12 集 高光片段</div>
+        <div class="bili-video-card__info--date">3小时前</div>
+        <span class="bili-video-card__stats--text">12.6万</span>
+        <span class="bili-video-card__stats--text">231</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200302">
+          <span class="bili-video-card__info--author" title="切片君A">切片君A</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00009" title="热播剧第 12 集 高光片段"></a>
+        <div class="bili-video-card__info--tit" title="热播剧第 12 集 高光片段">热播剧第 12 集 高光片段</div>
+        <div class="bili-video-card__info--date">4小时前</div>
+        <span class="bili-video-card__stats--text">9.8万</span>
+        <span class="bili-video-card__stats--text">188</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200303">
+          <span class="bili-video-card__info--author" title="切片君B">切片君B</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00101" title="今日随手拍"></a>
+        <div class="bili-video-card__info--tit" title="今日随手拍">今日随手拍</div>
+        <div class="bili-video-card__info--date">1小时前</div>
+        <span class="bili-video-card__stats--text">1,024</span>
+        <span class="bili-video-card__stats--text">36</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200304">
+          <span class="bili-video-card__info--author" title="爆肝君">爆肝君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00102" title="今日随手拍第二弹"></a>
+        <div class="bili-video-card__info--tit" title="今日随手拍第二弹">今日随手拍第二弹</div>
+        <div class="bili-video-card__info--date">2小时前</div>
+        <span class="bili-video-card__stats--text">2,048</span>
+        <span class="bili-video-card__stats--text">40</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200304">
+          <span class="bili-video-card__info--author" title="爆肝君">爆肝君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00103" title="今日随手拍第三弹"></a>
+        <div class="bili-video-card__info--tit" title="今日随手拍第三弹">今日随手拍第三弹</div>
+        <div class="bili-video-card__info--date">3小时前</div>
+        <span class="bili-video-card__stats--text">1,536</span>
+        <span class="bili-video-card__stats--text">28</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200304">
+          <span class="bili-video-card__info--author" title="爆肝君">爆肝君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00104" title="今日随手拍第四弹"></a>
+        <div class="bili-video-card__info--tit" title="今日随手拍第四弹">今日随手拍第四弹</div>
+        <div class="bili-video-card__info--date">4小时前</div>
+        <span class="bili-video-card__stats--text">2,560</span>
+        <span class="bili-video-card__stats--text">52</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200304">
+          <span class="bili-video-card__info--author" title="爆肝君">爆肝君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00105" title="今日随手拍第五弹"></a>
+        <div class="bili-video-card__info--tit" title="今日随手拍第五弹">今日随手拍第五弹</div>
+        <div class="bili-video-card__info--date">5小时前</div>
+        <span class="bili-video-card__stats--text">3,072</span>
+        <span class="bili-video-card__stats--text">64</span>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/100200304">
+          <span class="bili-video-card__info--author" title="爆肝君">爆肝君</span>
+        </a>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1E2E00012" title="无作者卡片"></a>
+        <div class="bili-video-card__info--tit" title="无作者卡片">无作者卡片</div>
+        <div class="bili-video-card__info--date">6小时前</div>
+        <span class="bili-video-card__stats--text">999</span>
+        <span class="bili-video-card__stats--text">10</span>
+      </div>
+    </div>
+  </body>
+</html>

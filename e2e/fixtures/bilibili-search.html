@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>脱敏搜索结果页夹具</title>
+  </head>
+  <body>
+    <!--
+      脱敏 B 站搜索结果页夹具。
+
+      与首页夹具的差别在于**作者链接的位置**：搜索结果卡片的作者链接
+      常常不在 .bili-video-card 内部，而在外层搜索结果模块里。
+      create-card-scan 的 allowSearchModuleFallback 就是为这种结构兜底
+      （向上找 .video-card-content，再在其中找空间链接）。
+      本夹具刻意让前两张卡只有模块级作者链接、后两张卡内自带作者链接，
+      两种结构都要覆盖。
+
+      末卡同样是解析不出 UID 的无作者卡，验证它不挂徽章。
+    -->
+    <div class="search-content">
+      <div class="video-card-content">
+        <div class="bili-video-card">
+          <a href="//www.bilibili.com/video/BV1SE0000001" title="颈椎病的日常防护做法"></a>
+          <div class="bili-video-card__info--tit" title="颈椎病的日常防护做法">颈椎病的日常防护做法</div>
+          <div class="bili-video-card__info--date">2天前</div>
+          <span class="bili-video-card__stats--text">4.2万</span>
+          <span class="bili-video-card__stats--text">96</span>
+        </div>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/200100100">
+          <span class="bili-video-card__info--author" title="康复科李医生">康复科李医生</span>
+        </a>
+      </div>
+      <div class="video-card-content">
+        <div class="bili-video-card">
+          <a href="//www.bilibili.com/video/BV1SE0000002" title="久坐人群的拉伸动作"></a>
+          <div class="bili-video-card__info--tit" title="久坐人群的拉伸动作">久坐人群的拉伸动作</div>
+          <div class="bili-video-card__info--date">3天前</div>
+          <span class="bili-video-card__stats--text">3.1万</span>
+          <span class="bili-video-card__stats--text">71</span>
+        </div>
+        <a class="bili-video-card__info--owner" href="//space.bilibili.com/200100100">
+          <span class="bili-video-card__info--author" title="康复科李医生">康复科李医生</span>
+        </a>
+      </div>
+      <div class="video-card-content">
+        <div class="bili-video-card">
+          <a href="//www.bilibili.com/video/BV1SE0000003" title="某网课 共120集全 中英字幕"></a>
+          <div class="bili-video-card__info--tit" title="某网课 共120集全 中英字幕">某网课 共120集全 中英字幕</div>
+          <div class="bili-video-card__info--date">6小时前</div>
+          <span class="bili-video-card__stats--text">1.8万</span>
+          <span class="bili-video-card__stats--text">20</span>
+          <a class="bili-video-card__info--owner" href="//space.bilibili.com/200100101">
+            <span class="bili-video-card__info--author" title="课程资料铺">课程资料铺</span>
+          </a>
+        </div>
+      </div>
+      <div class="video-card-content">
+        <div class="bili-video-card">
+          <a href="//www.bilibili.com/video/BV1SE0000004" title="城市夜间骑行vlog"></a>
+          <div class="bili-video-card__info--tit" title="城市夜间骑行vlog">城市夜间骑行vlog</div>
+          <div class="bili-video-card__info--date">1天前</div>
+          <span class="bili-video-card__stats--text">9,204</span>
+          <span class="bili-video-card__stats--text">143</span>
+          <a class="bili-video-card__info--owner" href="//space.bilibili.com/200100102">
+            <span class="bili-video-card__info--author" title="夜骑小张">夜骑小张</span>
+          </a>
+        </div>
+      </div>
+      <div class="bili-video-card">
+        <a href="//www.bilibili.com/video/BV1SE0000005" title="无作者搜索结果卡"></a>
+        <div class="bili-video-card__info--tit" title="无作者搜索结果卡">无作者搜索结果卡</div>
+        <div class="bili-video-card__info--date">8小时前</div>
+        <span class="bili-video-card__stats--text">512</span>
+        <span class="bili-video-card__stats--text">3</span>
+      </div>
+    </div>
+  </body>
+</html>
