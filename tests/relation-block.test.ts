@@ -7,6 +7,7 @@ import {
 } from "../src/api/relation";
 import {
   addBlockedAccount,
+  clearBlockedAccounts,
   getBlockedAccounts,
   isBlocked,
   removeBlockedAccount,
@@ -130,6 +131,20 @@ describe("拉黑记录存储", () => {
   });
 
   it("存储键未初始化时返回空列表", async () => {
+    expect(await getBlockedAccounts()).toEqual([]);
+    expect(storedValues[BLOCKED_STORAGE_KEY]).toBeUndefined();
+  });
+
+  it("重置插件会清空拉黑记录", async () => {
+    await addBlockedAccount({
+      accountKey: "uid:100",
+      uid: "100",
+      blockedAtMs: 1,
+    });
+    expect(await isBlocked("uid:100")).toBe(true);
+
+    await clearBlockedAccounts();
+
     expect(await getBlockedAccounts()).toEqual([]);
     expect(storedValues[BLOCKED_STORAGE_KEY]).toBeUndefined();
   });

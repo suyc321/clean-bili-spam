@@ -15,22 +15,9 @@
 import type {
   AccountKey,
   AccountProfileRecord,
+  ReviewTriggerHit,
   VideoObservationRecord,
 } from "../domain/types";
-
-/** 触发器信号标识。 */
-export type ReviewTriggerSignal =
-  | "repost-disclaimer" // 简介含侵权免责声明
-  | "resource-trafficking" // 投稿标题兜售成套可下载物料
-  | "reposted-video" // 同一投稿也出现在其他账号名下
-  | "burst-posting"; // 24 小时内投稿密集
-
-/** 一次触发器命中：哪个信号 + 面向用户的事实性描述。 */
-export interface ReviewTriggerHit {
-  signal: ReviewTriggerSignal;
-  /** 只陈述事实，不给出「是不是营销号」的结论。 */
-  detail: string;
-}
 
 /** 触发器输入。 */
 export interface ReviewTriggerInput {

@@ -5,8 +5,6 @@
  * 都从这里引用类型。按工程的依赖规则，本目录不得依赖任何运行时代码。
  */
 
-import type { BlockedEntry } from "../storage/blocked";
-
 /**
  * AI 接口支持的 API 格式。
  *
@@ -216,6 +214,24 @@ export interface IgnoreEntry {
 }
 
 /**
+ * 拉黑记录：本地审计与「已拉黑」状态来源。
+ *
+ * 拉黑是平台动作，本地只需要「什么时候拉黑了谁、由哪次判定触发」，
+ * 用于面板显示状态、设置页审计，以及误拉黑后快速定位。
+ * 类型定义在 domain 层，存储层只负责读写，避免 domain 反向依赖 storage。
+ */
+export interface BlockedEntry {
+  accountKey: AccountKey;
+  uid: string;
+  /** 拉黑时的账号昵称（可能缺失）。 */
+  displayName?: string;
+  /** 拉黑时该账号的 AI 概率快照，便于事后复盘误拉黑。 */
+  aiProbability?: number;
+  /** 发起拉黑的时间戳。 */
+  blockedAtMs: number;
+}
+
+/**
  * AI 判定审计记录：每次外发请求的本地留痕。
  * AI 判定是插件唯一的外发数据路径，审计让「可解释、可问责」可被检验。
  * 只记录元数据（账号、模型、数量、结果），不记录发送内容本身。
@@ -416,6 +432,11 @@ export interface AccountAnalysis {
    */
   followers?: number;
   archiveCount?: number;
+  /**
+   * 认证类型：-1 无 / 0 个人 / 1 机构。
+   * 来自公开名片，面板据此显示「个人认证 / 机构认证」。
+   */
+  officialVerifyType?: number;
   /** 累计观察到的投稿条数。 */
   observedVideos: number;
   /** 是否拿到简介文本。 */

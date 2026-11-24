@@ -68,7 +68,8 @@ export async function modifyRelation(
     credentials: "include",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
-      referer: "https://www.bilibili.com/",
+      // 不手写 Referer：它是 fetch 的 forbidden header，浏览器会静默丢弃。
+      // 请求从 B 站页面上下文发出，浏览器会自动带上正确的来源。
     },
     body: body.toString(),
   });

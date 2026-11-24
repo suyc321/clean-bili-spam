@@ -42,9 +42,11 @@ export interface AdapterScanResult {
   adapterVersion: number;
   pageKind: PageKind;
   /**
-   * 适配器健康度：
-   * - healthy：卡片正常解析，可继续提交观察；
-   * - degraded：卡片缺失或过半解析不出稳定身份，停止提交新观察；
+   * 适配器健康度（仅代表本轮扫描范围）：
+   * - healthy：卡片正常解析；
+   * - degraded：本轮范围内卡片缺失或过半解析不出稳定身份。这是诊断信号，
+   *   已解析出身份的卡片仍可提交；页面级健康度由 content/page-stats 按
+   *   整页已见卡片计算；
    * - unsupported：没有匹配的适配器。
    */
   health: "healthy" | "degraded" | "unsupported";

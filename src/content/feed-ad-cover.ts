@@ -15,8 +15,8 @@
 import type { CoverColor, FeedAdMode } from "../domain/types";
 import { ensureCardCover, removeCardCover, setCardHidden } from "./card-cover";
 
-/** 推荐流格子，以及分区强插格子。 */
-const CARD_SELECTOR = ".bili-feed-card, .floor-single-card";
+/** 推荐流格子、分区强插格子，以及独立的直播卡。 */
+const CARD_SELECTOR = ".bili-feed-card, .floor-single-card, .bili-live-card";
 
 /**
  * 这张推荐位是不是强插，而不是普通投稿。
@@ -59,7 +59,11 @@ export function syncFeedAdCovers(
     }
     if (mode === "cover") {
       setCardHidden(card, false);
-      ensureCardCover(card, { kind: "ad", color, label: "已遮挡广告" });
+      ensureCardCover(card, {
+        kind: "ad",
+        color,
+        label: "已遮挡广告/强插",
+      });
     } else if (mode === "remove") {
       removeCardCover(card, "ad");
       setCardHidden(card, true);

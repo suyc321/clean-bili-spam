@@ -5,7 +5,6 @@
 // （official_verify.type）而不是数字 Official——这两处都踩过坑，故钉住。
 import { describe, expect, it, vi } from "vitest";
 import {
-  archiveToFansRatio,
   clearCardCache,
   fetchAccountCard,
 } from "../src/api/account-card";
@@ -78,41 +77,6 @@ describe("UP 主公开名片", () => {
     );
     const info = await fetchAccountCard("1", fetchImpl as unknown as typeof fetch);
     expect(info?.officialVerifyType).toBe(1);
-  });
-
-  it("投稿/粉丝比反映农场比例（不设阈值，只出原始值）", () => {
-    const creator = {
-      mid: "uid:a" as const,
-      fans: 10_895_795,
-      archiveCount: 264,
-      seasonVideos: [],
-      fetchedAtMs: 1,
-    };
-    const farm = {
-      mid: "uid:b" as const,
-      fans: 14_418,
-      archiveCount: 103,
-      seasonVideos: [],
-      fetchedAtMs: 1,
-    };
-    // 农场账号的投稿/粉丝比高出两个数量级以上。
-    const creatorRatio = archiveToFansRatio(creator)!;
-    const farmRatio = archiveToFansRatio(farm)!;
-    expect(farmRatio / creatorRatio).toBeGreaterThan(100);
-  });
-
-  it("缺粉丝数或投稿数时返回 null", () => {
-    expect(
-      archiveToFansRatio({
-        mid: "uid:a" as const, archiveCount: 10, seasonVideos: [], fetchedAtMs: 1,
-      }),
-    ).toBeNull();
-    expect(
-      archiveToFansRatio({
-        mid: "uid:a" as const, fans: 0, archiveCount: 10,
-        seasonVideos: [], fetchedAtMs: 1,
-      }),
-    ).toBeNull();
   });
 
   it("接口返回 code≠0 时静默返回 null", async () => {

@@ -65,6 +65,17 @@ describe("发布时间解析", () => {
     );
   });
 
+  it("解析秒、昨天、周、月、年等常见文案", () => {
+    const day = 24 * 60 * 60_000;
+    expect(parsePublishedAt("30秒前", now)).toBe(now - 30_000);
+    expect(parsePublishedAt("昨天", now)).toBe(now - day);
+    expect(parsePublishedAt("前天", now)).toBe(now - 2 * day);
+    expect(parsePublishedAt("2周前", now)).toBe(now - 14 * day);
+    // 月/年是近似值，只服务粗粒度的投稿节奏信号。
+    expect(parsePublishedAt("3个月前", now)).toBe(now - 90 * day);
+    expect(parsePublishedAt("1年前", now)).toBe(now - 365 * day);
+  });
+
   it("不为无法确认的时间文本伪造时间戳", () => {
     expect(parsePublishedAt("昨天 12:30", now)).toBeUndefined();
     expect(parsePublishedAt("神秘时间", now)).toBeUndefined();

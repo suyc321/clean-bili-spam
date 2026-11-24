@@ -184,6 +184,58 @@ describe("三态判定的徽章", () => {
     ).toBe(true);
   });
 
+  it("概率相同但 AI 理由或证据缺口变化时也重绘面板", () => {
+    const card = makeCard();
+    const first = aiOutcome(70);
+    if (first.kind !== "ai") {
+      return;
+    }
+    first.review.reason = "第一次判定理由";
+    renderBadge(card, makeAnalysis(first), DEFAULT_SETTINGS, noop);
+
+    const host = requireHost(card.mount.cardElement);
+    host.shadowRoot!.querySelector<HTMLButtonElement>(".badge")!.click();
+    expect(surfaceOf(host).textContent).toContain("第一次判定理由");
+
+    const second = aiOutcome(70);
+    if (second.kind !== "ai") {
+      return;
+    }
+    second.review.reason = "第二次判定理由";
+    second.review.insufficientData = ["缺少评论区样本"];
+    renderBadge(card, makeAnalysis(second), DEFAULT_SETTINGS, noop);
+
+    // 概率仍是 70%，但面板必须展示新结论，而不是复用上一次的 DOM。
+    expect(surfaceOf(host).textContent).toContain("第二次判定理由");
+    expect(surfaceOf(host).textContent).not.toContain("第一次判定理由");
+    expect(surfaceOf(host).textContent).toContain("缺少评论区样本");
+  });
+
+  it("补全后的粉丝数、投稿数与认证会更新面板", () => {
+    const card = makeCard();
+    const analysis = makeAnalysis(aiOutcome(40));
+    renderBadge(card, analysis, DEFAULT_SETTINGS, noop);
+    const host = requireHost(card.mount.cardElement);
+    expect(surfaceOf(host).querySelector(".meta.audience")).toBeNull();
+
+    renderBadge(
+      card,
+      {
+        ...analysis,
+        followers: 12_345,
+        archiveCount: 678,
+        officialVerifyType: 1,
+      },
+      DEFAULT_SETTINGS,
+      noop,
+    );
+
+    const audience = surfaceOf(host).querySelector(".meta.audience");
+    expect(audience?.textContent).toContain("粉丝 1.2万");
+    expect(audience?.textContent).toContain("投稿 678");
+    expect(audience?.textContent).toContain("机构认证");
+  });
+
   it("AI 概率分档由 isHighRisk 判定（弱化遮罩与徽章配色同一常量）", () => {
     expect(isHighRisk(makeAnalysis(aiOutcome(85)))).toBe(true);
     expect(isHighRisk(makeAnalysis(aiOutcome(79)))).toBe(false);

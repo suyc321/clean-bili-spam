@@ -18,6 +18,16 @@ export function accountsNeedingAutoReview(
     if (analysis === undefined || analysis.review.kind === "ai") {
       continue;
     }
+    // 用户已经明确处置过的账号不再自动花钱：
+    // 白名单表示「这是正常账号」，忽略表示「不想再看到提示」。
+    // 待处理（candidate）保留自动判定：用户只是标记稍后人工复核，
+    // AI 结论仍然是有效的辅助信息。
+    if (
+      analysis.disposition === "whitelisted" ||
+      analysis.disposition === "ignored"
+    ) {
+      continue;
+    }
     seen.add(accountKey);
     pending.push(accountKey);
   }

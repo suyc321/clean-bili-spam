@@ -5,7 +5,10 @@ import {
   clearObservationDatabase,
   ingestObservation,
 } from "../src/storage/database";
-import { reviewAccountsWithAi } from "../src/application/analyze-observations";
+import {
+  reviewAccountWithAi,
+  reviewAccountsWithAi,
+} from "../src/application/analyze-observations";
 
 const STORAGE_KEYS = {
   settings: "kcf:settings:v1",
@@ -170,6 +173,62 @@ describe("批量 AI 复核", () => {
     expect(result.analyses).toHaveLength(1);
     expect(result.analyses[0]?.accountKey).toBe("uid:1001");
     expect(result.skipped).toBe(2);
+    vi.unstubAllGlobals();
+  });
+
+  it("AI 网络请求不占用写队列，只有入库写入经过写门", async () => {
+    await enableAi();
+    await seedAccount("1001");
+
+    let releaseFetch!: (response: Response) => void;
+    const fetchResponse = new Promise<Response>((resolve) => {
+      releaseFetch = resolve;
+    });
+    let fetchStarted!: () => void;
+    const fetchStartedPromise = new Promise<void>((resolve) => {
+      fetchStarted = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(() => {
+        fetchStarted();
+        return fetchResponse;
+      }),
+    );
+
+    const gateCalls: string[] = [];
+    const gate = async <T>(operation: () => Promise<T>): Promise<T> => {
+      gateCalls.push("enter");
+      const result = await operation();
+      gateCalls.push("exit");
+      return result;
+    };
+
+    const review = reviewAccountWithAi("uid:1001", gate);
+    await fetchStartedPromise;
+    // 外发请求已经发出，但写门尚未被占用：慢接口不会堵住其他读写。
+    expect(gateCalls).toEqual([]);
+
+    releaseFetch(
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content:
+                  '{"marketingProbability": 66, "category": "marketing", "reason": "模板化量产", "insufficientData": []}',
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await review;
+    expect(result[0]?.review.kind).toBe("ai");
+    // 只有 putAiReview + addAiAuditEntry 这一段进入写门。
+    expect(gateCalls).toEqual(["enter", "exit"]);
     vi.unstubAllGlobals();
   });
 

@@ -110,8 +110,10 @@ function collectCandidateCards(candidateCards: Iterable<Element>): HTMLElement[]
  * 扫描页面上的视频卡片。
  *
  * 健康度判定：无卡片，或超过半数卡片解析不出稳定账号身份时判为
- * degraded。degraded 时上层停止提交新观察，状态只在弹出页显示，
- * 避免用残缺数据写入本地库。
+ * degraded。注意这是**本轮扫描范围**内的诊断信号：增量扫描只拿到新增
+ * 卡片，一张失败卡片就会让 1/1 变成 100% 失败。页面级健康度由
+ * content/page-stats 按整页已见卡片计算；已解析出身份的卡片不会因为
+ * 同批存在失败卡片而被丢弃。
  *
  * @param candidateCards 增量扫描时的候选卡片；省略则全量查询。
  * 长列表页面上每次只处理新增卡片，避免重复遍历数百个节点。

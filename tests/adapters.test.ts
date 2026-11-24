@@ -169,4 +169,22 @@ describe("B站页面适配器", () => {
       displayName: "新UP",
     });
   });
+
+  it("视频页不套用首页适配器，返回 unsupported", () => {
+    document.body.innerHTML = `
+      <article class="bili-video-card">
+        <a href="https://www.bilibili.com/video/BV1Ab411c7xY">封面</a>
+        <a class="bili-video-card__info--tit" title="相关推荐" href="https://www.bilibili.com/video/BV1Ab411c7xY">相关推荐</a>
+        <a class="bili-video-card__info--owner" href="https://space.bilibili.com/123456">作者</a>
+      </article>
+    `;
+
+    const result = scanCurrentPage(
+      document,
+      new URL("https://www.bilibili.com/video/BV1xx411c7xx"),
+    );
+
+    expect(result.health).toBe("unsupported");
+    expect(result.cards).toEqual([]);
+  });
 });

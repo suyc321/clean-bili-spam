@@ -6,6 +6,9 @@
 import type { AdapterScanResult, PageAdapter } from "./contract";
 import { createCardAdapter } from "./bilibili/create-card-scan";
 
+/** 首页适配器只处理首页推荐流，不接管视频页/番剧页/专栏页等其他 www 路径。 */
+const HOME_PATHS = new Set(["/", "/index.html"]);
+
 /** 全部已注册适配器；顺序即匹配优先级（先注册先匹配）。 */
 const adapters: PageAdapter[] = [
   // UP 主主页：直接信任页面地址中的 UID，可读取昵称与签名。
@@ -25,11 +28,14 @@ const adapters: PageAdapter[] = [
     allowSearchModuleFallback: true,
   }),
   // 首页/推荐页：只信任卡片内部的作者链接，防止顶部登录用户污染。
+  // 必须限定路径：视频页的相关推荐也用 .bili-video-card，套用首页适配器
+  // 会把它们当成首页观察入库，并在弹出页误报「适配降级」。
   createCardAdapter({
     id: "bilibili-home-v1",
     version: 1,
     pageKind: "home",
-    matches: (url) => url.hostname === "www.bilibili.com",
+    matches: (url) =>
+      url.hostname === "www.bilibili.com" && HOME_PATHS.has(url.pathname),
   }),
 ];
 

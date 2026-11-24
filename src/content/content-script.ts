@@ -39,8 +39,14 @@ import {
   type BadgeAction,
 } from "./badge-renderer";
 import { accountsNeedingAutoReview } from "./auto-review";
+import {
+  cardFieldsOf,
+  seasonVideosOf,
+  type CardPayload,
+} from "./card-enrichment";
 import { ensureCardCover, removeCardCover } from "./card-cover";
 import { syncFeedAdCovers } from "./feed-ad-cover";
+import { summarizePageCards } from "./page-stats";
 
 /** 最近一次扫描结果，AI 判定写回后用来重算弹出页摘要。 */
 let lastScanResult: ReturnType<typeof scanCurrentPage> | undefined;
@@ -62,8 +68,6 @@ const pendingCards = new Set<HTMLElement>();
  * 路由变化时清空。
  */
 const renderedCards = new Map<HTMLElement, ExtractedCard>();
-/** 本页面的累计扫描统计（增量扫描时累加，路由变化时清零）。 */
-const pageStats = { scannedCards: 0, unresolvedCards: 0 };
 /** 设置缓存；Service Worker 不可达时退回默认值。 */
 let settings: ExtensionSettings = DEFAULT_SETTINGS;
 /** 本地设置读到之前不盖，避免把用户关掉的遮罩先闪一下。 */
@@ -104,7 +108,8 @@ async function initialize(): Promise<void> {
   registerContentMessages();
   observeSettingsChanges();
   try {
-    // 只读本地设置，不走后台那次带判定记录和观察库的查询。
+    // 设置只从本地读：dashboard.get 会顺带读判定日志、观察库统计和三份名单，
+    // 内容脚本只用得到设置与拉黑 key，没必要每次页面加载都付这份开销。
     const stored = await chrome.storage.local.get(SETTINGS_STORAGE_KEY);
     const raw = stored[SETTINGS_STORAGE_KEY];
     settings = normalizeSettings(
@@ -117,12 +122,13 @@ async function initialize(): Promise<void> {
   }
   coverReady = true;
   syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
+  // 同步本地拉黑记录，让面板按钮显示「取消拉黑」状态。
   try {
-    settings = (await sendRuntimeRequest("dashboard.get", {})).settings;
-    // 同步本地拉黑记录，让面板按钮显示「取消拉黑」状态。
-    refreshBlockedAccounts((await getBlockedAccounts()).map((entry) => entry.accountKey));
+    refreshBlockedAccounts(
+      (await getBlockedAccounts()).map((entry) => entry.accountKey),
+    );
   } catch (error) {
-    console.warn("[B站内容净化助手] 无法读取设置，使用默认值。", error);
+    console.warn("[B站内容净化助手] 无法读取拉黑记录。", error);
   }
 
   syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
@@ -131,7 +137,8 @@ async function initialize(): Promise<void> {
 
 const WATCHED_CARD_SELECTOR =
   ".bili-video-card, .bili-live-card, .bili-feed-card, .floor-single-card";
-const FEED_COVER_SELECTOR = ".bili-feed-card, .floor-single-card";
+const FEED_COVER_SELECTOR =
+  ".bili-feed-card, .floor-single-card, .bili-live-card";
 
 /** 新格子或链接一出现就盖，不等待扫描防抖。 */
 function refreshFeedCoverFrom(node: Node): void {
@@ -270,6 +277,20 @@ function scheduleScan(): void {
     scanTimer = undefined;
     void scanAndRender(false);
   }, 350);
+}
+
+/**
+ * 清理已脱离文档的卡片登记。
+ *
+ * B 站长列表会移除或复用卡片节点；Map 若只增不减，一次长滚动就会把
+ * 所有历史节点连同整棵子树留在内存里。
+ */
+function pruneDetachedCards(): void {
+  for (const element of renderedCards.keys()) {
+    if (!element.isConnected) {
+      renderedCards.delete(element);
+    }
+  }
 }
 
 /** 把已登记卡片按当前分析重绘。增量扫描后旧卡片的徽章也靠这次对齐。 */
@@ -424,6 +445,8 @@ async function scanAndRender(force: boolean): Promise<void> {
   }
   scanRunning = true;
   try {
+    // 长列表会移除/复用卡片：先清掉脱离文档的登记，避免 Map 只增不减。
+    pruneDetachedCards();
     // 盖广告不依赖本轮的名片补全、入库和 AI。先盖，再做那些事。
     syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
     // SPA 路由变化后清空缓存：旧页面的分析结果对新区不再可靠。
@@ -435,8 +458,6 @@ async function scanAndRender(force: boolean): Promise<void> {
       renderedCards.clear();
       autoReviewQueue.length = 0;
       autoReviewQueued.clear();
-      pageStats.scannedCards = 0;
-      pageStats.unresolvedCards = 0;
       force = true;
     }
 
@@ -461,9 +482,10 @@ async function scanAndRender(force: boolean): Promise<void> {
       Date.now(),
       candidates,
     );
-    // 健康度为 degraded 时不在页面上弹提示。状态在弹出页显示为「适配降级」，
-    // 本轮 freshCards 为空，不把认不出的卡片写入本地库。
     // 只有解析出账号键、UID 与主页地址的卡片才可提交观察。
+    // 健康度是整页指标（见 page-stats），不用来冻结单轮候选：增量扫描的
+    // 候选子集里只要有一张解析失败，就会被误算成「过半失败」，把同批里
+    // 能正常解析的卡片也一起丢掉。认不出身份的卡片本来就在 resolvedCards 之外。
     const resolvedCards = result.cards.filter(
       (card): card is ExtractedCard & {
         accountKey: AccountKey;
@@ -474,49 +496,45 @@ async function scanAndRender(force: boolean): Promise<void> {
         card.uid !== undefined &&
         card.profileUrl !== undefined,
     );
-    // 登记本轮扫描到的卡片并累计页面统计，供渲染与摘要整页覆盖。
+    // 登记本轮扫描到的卡片，供渲染与整页摘要使用。
+    // 摘要按 renderedCards 去重统计，强制重扫不会重复累加。
     for (const card of result.cards) {
       renderedCards.set(card.mount.cardElement, card);
     }
-    pageStats.scannedCards += result.cards.length;
-    pageStats.unresolvedCards += result.cards.filter(
-      (card) => card.accountKey === undefined,
-    ).length;
-    // 适配器降级时冻结提交：这一轮不把认不出的卡片写入本地库。
-    const freshCards =
-      result.health === "healthy"
-        ? resolvedCards.filter((card) => {
-            const signature = cardSignature(card);
-            const previous = processedCards.get(card.mount.cardElement);
-            if (!force && previous === signature) {
-              return false;
-            }
-            return true;
-          })
-        : [];
+    const freshCards = resolvedCards.filter((card) => {
+      const signature = cardSignature(card);
+      const previous = processedCards.get(card.mount.cardElement);
+      if (!force && previous === signature) {
+        return false;
+      }
+      return true;
+    });
 
     if (freshCards.length > 0) {
-      // 开启补全时先取公开名片（简介/粉丝/投稿数），再提交观察。
-      // 简介是关键：首页卡片解析不到它，「侵权免责声明」在首页没有输入。
       seasonVideosByAccount.clear();
-      await enrichFreshCards(freshCards);
-      const observations = groupObservations(freshCards, seasonVideosByAccount);
-      try {
-        // 协议单批上限 100，这里按 50 分批提交并逐批合并分析结果。
-        for (const batch of chunk(observations, 50)) {
-          const response = await sendRuntimeRequest("observations.ingest", {
-            observations: batch,
-          });
-          for (const analysis of response.analyses) {
-            analyses.set(analysis.accountKey, analysis);
-          }
+      // 先提交 DOM 采集到的观察并渲染：公开名片补全是可选网络请求，
+      // 不该挡住入库和徽章。补全拿到数据后再用同一批卡片补交一次，
+      // 由 IndexedDB 的稀疏合并把简介/粉丝数/合集视频并进去。
+      const baseIngested = await ingestObservations(
+        groupObservations(freshCards),
+      );
+      let complete = baseIngested;
+      if (baseIngested) {
+        // 补全期间先让用户看到基础判定，不必等网络请求结束。
+        if (settings.showBadges && settings.enrichAccountInfo) {
+          renderRegisteredCards();
         }
+        if (await enrichFreshCards(freshCards)) {
+          complete = await ingestObservations(
+            groupObservations(freshCards, seasonVideosByAccount),
+          );
+        }
+      }
+      // 失败时不写签名缓存，下轮扫描会重新提交这批卡片。
+      if (complete) {
         for (const card of freshCards) {
           processedCards.set(card.mount.cardElement, cardSignature(card));
         }
-      } catch (error) {
-        // 失败时不写签名缓存，下轮扫描会重新提交这批卡片。
-        console.error("[B站内容净化助手] 本页分析失败", error);
       }
     }
 
@@ -534,7 +552,8 @@ async function scanAndRender(force: boolean): Promise<void> {
 
     lastScanResult = result;
     summary = buildPageSummary(result, renderedCards, analyses);
-    if (settings.aiEnabled && result.health === "healthy") {
+    // 能解析出身份的卡片就是有效观察，不再受单轮候选健康度牵连。
+    if (settings.aiEnabled && freshCards.length > 0) {
       enqueueAutoReviews(freshCards.map((card) => card.accountKey));
     }
     publishSummary();
@@ -545,6 +564,31 @@ async function scanAndRender(force: boolean): Promise<void> {
       scanAgain = false;
       scheduleScan();
     }
+  }
+}
+
+/**
+ * 提交一批观察并合并分析结果。
+ *
+ * @returns 是否全部批次成功；失败时调用方不写签名缓存，下一轮会重试
+ */
+async function ingestObservations(
+  observations: AccountObservationInput[],
+): Promise<boolean> {
+  try {
+    // 协议单批上限 100，这里按 50 分批提交并逐批合并分析结果。
+    for (const batch of chunk(observations, 50)) {
+      const response = await sendRuntimeRequest("observations.ingest", {
+        observations: batch,
+      });
+      for (const analysis of response.analyses) {
+        analyses.set(analysis.accountKey, analysis);
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error("[B站内容净化助手] 本页分析失败", error);
+    return false;
   }
 }
 
@@ -617,10 +661,12 @@ function groupObservations(
  * 没有这个 API——早期实现直接调它会抛 TypeError，还会把整轮扫描带崩（徽章
  * 一个都渲染不出来）。SW 侧未授权或失败时返回空结果，这里据此静默跳过：
  * 这是可选增强，不该弹权限提示打断浏览。
+ *
+ * @returns 是否至少拿到一个账号的名片数据（调用方据此决定要不要补交观察）
  */
-async function enrichFreshCards(cards: EnrichableCard[]): Promise<void> {
+async function enrichFreshCards(cards: EnrichableCard[]): Promise<boolean> {
   if (!settings.enrichAccountInfo) {
-    return;
+    return false;
   }
   // 每个账号只请求一次：同屏多卡同一 UP 是常态（尤其是矩阵号）。
   const pending = [
@@ -631,7 +677,7 @@ async function enrichFreshCards(cards: EnrichableCard[]): Promise<void> {
     ),
   ];
   if (pending.length === 0) {
-    return;
+    return false;
   }
   let received: Record<string, CardPayload>;
   try {
@@ -642,13 +688,15 @@ async function enrichFreshCards(cards: EnrichableCard[]): Promise<void> {
   } catch (error) {
     // 消息失败不该中断扫描：补全是可选增强，失败就按没有简介处理。
     console.warn("[B站内容净化助手] 公开信息补全请求失败，已跳过。", error);
-    return;
+    return false;
   }
+  let enriched = false;
   for (const uid of pending) {
     const info = received[uid];
     if (info === undefined) {
       continue;
     }
+    enriched = true;
     for (const card of cards) {
       if (card.uid === uid) {
         card.cardInfo = { ...info, fetchedAtMs: Date.now() };
@@ -656,107 +704,12 @@ async function enrichFreshCards(cards: EnrichableCard[]): Promise<void> {
     }
     // 合集视频转成观察记录：与 DOM 采集的记录同形，走同一条入库通道。
     const accountKey = `uid:${uid}` as AccountKey;
-    const observed = seasonVideosOf(accountKey, info);
+    const observed = seasonVideosOf(info);
     if (observed.length > 0) {
       seasonVideosByAccount.set(accountKey, observed);
     }
   }
-}
-
-/**
- * 把合集视频转成观察记录形态。
- *
- * 来源标成 `adapterId: "account-card"` 以便区分数据来自接口而不是 DOM 采集；
- * `pageKind` 用 `space`，因为合集本质上属于 UP 主空间页的内容。
- * metricsRaw 保留播放、弹幕原文，只入库，不在这里解析。
- */
-function seasonVideosOf(
-  accountKey: AccountKey,
-  info: CardPayload,
-): VideoObservationInput[] {
-  const source = {
-    pageKind: "space" as const,
-    adapterId: "account-card",
-    adapterVersion: 1,
-  };
-  return (info.seasonVideos ?? []).map((video) => ({
-    videoKey: video.bvid,
-    bvid: video.bvid,
-    title: video.title,
-    videoUrl: `https://www.bilibili.com/video/${video.bvid}`,
-    metricsRaw: [
-      ...(video.view === undefined ? [] : [String(video.view)]),
-      ...(video.danmaku === undefined ? [] : [String(video.danmaku)]),
-    ],
-    source,
-    observedAtMs: Date.now(),
-    ...(video.pubdate === undefined
-      ? {}
-      : {
-          publishedAtMs: video.pubdate * 1_000,
-          publishedText: relativeTime(video.pubdate * 1_000),
-        }),
-  }));
-}
-
-/** 时间戳转「N 天前」这类文本，与 DOM 采集的 publishedText 同口径。 */
-function relativeTime(atMs: number): string {
-  const diff = Date.now() - atMs;
-  const day = 86_400_000;
-  if (diff < 0) {
-    return "刚刚";
-  }
-  if (diff < day) {
-    return `${Math.floor(diff / 3_600_000)} 小时前`;
-  }
-  if (diff < day * 30) {
-    return `${Math.floor(diff / day)} 天前`;
-  }
-  return `${Math.floor(diff / (day * 30))} 个月前`;
-}
-
-/** 名片载荷：accountCard.get 返回的单条形态。 */
-interface CardPayload {
-  name?: string;
-  sign?: string;
-  fans?: number;
-  archiveCount?: number;
-  officialVerifyType?: number;
-  seasonCount?: number;
-  seasonVideos?: SeasonVideoPayload[];
-}
-
-/** 合集接口拿到的单条投稿（仅取特征计算会用到的字段）。 */
-interface SeasonVideoPayload {
-  bvid: string;
-  title: string;
-  pubdate?: number;
-  duration?: number;
-  view?: number;
-  danmaku?: number;
-}
-
-/** 从卡片上的名片信息取出要提交的字段。 */
-function cardFieldsOf(
-  info: (CardPayload & { fetchedAtMs: number }) | undefined,
-): Record<string, unknown> {
-  if (info === undefined) {
-    return {};
-  }
-  return {
-    ...(info.sign === undefined || info.sign.trim() === ""
-      ? {}
-      : { profileBio: info.sign }),
-    ...(info.fans === undefined ? {} : { profileFollowers: info.fans }),
-    ...(info.archiveCount === undefined
-      ? {}
-      : { profileArchiveCount: info.archiveCount }),
-    // 取到过就置 true：下游据此区分「无简介」与「没查过」。
-    profileCardFetched: true,
-    ...(info.officialVerifyType === undefined
-      ? {}
-      : { profileOfficialVerifyType: info.officialVerifyType }),
-  };
+  return enriched;
 }
 
 /**
@@ -967,13 +920,24 @@ interface PopupBlockAccount {
 }
 
 /**
+ * 单次批量拉黑上限，与 PopupApp 的 MAX_BLOCK_BATCH 保持一致。
+ * 内容脚本再做一次防御性截断：即使调用方发来更多账号，也不会连续打满接口。
+ */
+const MAX_POPUP_BLOCK_BATCH = 10;
+/** 连续拉黑之间的间隔，避免触发 B 站风控。 */
+const POPUP_BLOCK_INTERVAL_MS = 600;
+
+/**
  * 按弹出页给出的名单逐个拉黑。
  * 凭证只取一次；某一户失败不影响其余账号。调用方在有成功时再刷新页面。
  */
 async function blockAccountsFromPopup(
   message: unknown,
 ): Promise<{ blocked: number; failed: number; error?: string }> {
-  const accounts = readPopupBlockAccounts(message);
+  const accounts = readPopupBlockAccounts(message).slice(
+    0,
+    MAX_POPUP_BLOCK_BATCH,
+  );
   if (accounts.length === 0) {
     return { blocked: 0, failed: 0 };
   }
@@ -990,7 +954,10 @@ async function blockAccountsFromPopup(
   }
   let blocked = 0;
   let failed = 0;
-  for (const account of accounts) {
+  for (const [index, account] of accounts.entries()) {
+    if (index > 0) {
+      await delay(POPUP_BLOCK_INTERVAL_MS);
+    }
     try {
       await modifyRelation("block", { uid: account.uid, csrf: prepared.csrf });
       await addBlockedAccount({
@@ -1015,6 +982,13 @@ async function blockAccountsFromPopup(
     );
   }
   return { blocked, failed };
+}
+
+/** 等待指定毫秒数（批量拉黑节流用）。 */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function readPopupBlockAccounts(message: unknown): PopupBlockAccount[] {
@@ -1185,14 +1159,15 @@ function stateRank(review: PageAccountSummary["review"]): number {
 }
 
 /**
- * 组装页面摘要：适配器健康与诊断取本轮扫描，卡片与账号统计覆盖整页
- * （增量扫描时累加），账号按 summaryRank 降序。
+ * 组装页面摘要：卡片统计与健康度按整页已见卡片集合计算（去重，不随重扫累加），
+ * 诊断信息取本轮扫描，账号按 summaryRank 降序。
  */
 function buildPageSummary(
   result: ReturnType<typeof scanCurrentPage>,
   pageCards: Map<HTMLElement, ExtractedCard>,
   currentAnalyses: Map<AccountKey, AccountAnalysis>,
 ): PageSummary {
+  const stats = summarizePageCards(pageCards.values());
   const accountKeys = new Set(
     [...pageCards.values()]
       .map((card) => card.accountKey)
@@ -1200,9 +1175,12 @@ function buildPageSummary(
   );
   return {
     pageKind: result.pageKind,
-    scannedCards: pageStats.scannedCards,
-    unresolvedCards: pageStats.unresolvedCards,
-    adapterHealth: result.health,
+    scannedCards: stats.scannedCards,
+    unresolvedCards: stats.unresolvedCards,
+    // 没有匹配适配器时保持 unsupported；其余情况按整页卡片判断，
+    // 不能用增量候选子集的结论覆盖整页状态。
+    adapterHealth:
+      result.health === "unsupported" ? "unsupported" : stats.health,
     adapterId: result.adapterId,
     adapterVersion: result.adapterVersion,
     diagnostics: result.diagnostics,

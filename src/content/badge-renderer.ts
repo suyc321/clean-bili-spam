@@ -831,6 +831,10 @@ function renderStamp(
   settings: ExtensionSettings,
   onAiReview?: () => Promise<void>,
 ): string {
+  const aiReview =
+    analysis !== undefined && analysis.review.kind === "ai"
+      ? analysis.review.review
+      : undefined;
   return JSON.stringify({
     cardKey: card.cardKey,
     displayName: analysis?.displayName ?? card.displayName,
@@ -845,25 +849,36 @@ function renderStamp(
             reviewKind: analysis.review.kind,
             observedVideos: analysis.observedVideos,
             disposition: analysis.disposition,
+            // 粉丝数/投稿数展示在面板头部；补全完成后要能刷新这一行。
+            followers: analysis.followers ?? null,
+            archiveCount: analysis.archiveCount ?? null,
+            officialVerifyType: analysis.officialVerifyType ?? null,
             // 触发器命中时列出事实性描述，「为什么提示你复核」。
             triggers:
               analysis.review.kind === "triggered"
                 ? analysis.review.triggers.map((hit) => hit.detail)
                 : [],
-            aiProbability:
-              analysis.review.kind === "ai"
-                ? analysis.review.review.marketingProbability
-                : null,
+            aiProbability: aiReview?.marketingProbability ?? null,
+            // 概率相同但理由/模型/证据缺口变化时必须重绘：重新判定后
+            // 用户要看到的是新理由，而不是上一次的结论。
+            aiReason: aiReview?.reason ?? null,
+            aiModel: aiReview?.model ?? null,
+            aiGaps: aiReview?.insufficientData ?? null,
           },
   });
 }
 
-/** 把粉丝数/投稿数格式化成一行；未开启补全时返回 null（不展示该行）。 */
+/** 把粉丝数/投稿数/认证格式化成一行；没有可展示内容时返回 null。 */
 function formatAudience(analysis: AccountAnalysis | undefined): string | null {
   if (analysis === undefined) {
     return null;
   }
-  if (analysis.followers === undefined && analysis.archiveCount === undefined) {
+  if (
+    analysis.followers === undefined &&
+    analysis.archiveCount === undefined &&
+    analysis.officialVerifyType !== 0 &&
+    analysis.officialVerifyType !== 1
+  ) {
     return null;
   }
   const parts: string[] = [];
@@ -872,6 +887,12 @@ function formatAudience(analysis: AccountAnalysis | undefined): string | null {
   }
   if (analysis.archiveCount !== undefined) {
     parts.push(`投稿 ${formatCount(analysis.archiveCount)}`);
+  }
+  // 认证类型 -1 表示没有认证，不展示。
+  if (analysis.officialVerifyType === 0) {
+    parts.push("个人认证");
+  } else if (analysis.officialVerifyType === 1) {
+    parts.push("机构认证");
   }
   return parts.join(" · ");
 }

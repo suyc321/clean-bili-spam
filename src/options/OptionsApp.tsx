@@ -19,9 +19,9 @@ import { ModelCombo } from "./ModelCombo";
 
 const AUDIT_PAGE_SIZE = 20;
 
-/** 点「插入示例」时追加到判定标准末尾，用来演示怎么改口径。 */
+/** 点「插入示例」时追加到判定标准末尾，演示怎么改口径（不按观点或立场过滤）。 */
 const CRITERIA_EXAMPLE =
-  "（我不喜欢科技视频，请把所有的发科技视频的up判定为营销号）";
+  "（标题里出现「全套」「网盘」「提取码」时提高概率；证据不足时仍选 uncertain）";
 
 export function OptionsApp(): React.JSX.Element {
   /** 面板状态（设置 + 名单），undefined 表示尚未加载完成。 */
@@ -331,11 +331,11 @@ export function OptionsApp(): React.JSX.Element {
     setNotice("观察记录已清除。");
   }
 
-  /** 重置插件：设置、名单、观察记录和判定日志一起清空。 */
+  /** 重置插件：设置、名单、观察记录、判定日志和拉黑记录一起清空。 */
   async function resetData(): Promise<void> {
     if (
       !window.confirm(
-        "确定重置插件吗？观察记录、判定记录、白名单、待处理、忽略和设置都会清除。",
+        "确定重置插件吗？观察记录、判定记录、拉黑记录、白名单、待处理、忽略和设置都会清除。",
       )
     ) {
       return;

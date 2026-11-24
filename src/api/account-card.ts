@@ -199,8 +199,8 @@ interface SeasonsResponse {
  * - `page_size` 只能取 20，传 50/100 直接 -400；因此最多覆盖 20 个合集；
  * - 每个合集在列表里只带前约 6 条投稿；
  * - 合集内翻页接口 `seasons_archives_list` 被 -352 风控，**不可依赖**；
- * - 只有把投稿组织进合集的 UP 主才有数据；没有合集的账号返回空数组
- *   （内容农场大多如此，因此 `seasonCount=0` 配高投稿数本身是个观察点）。
+ * - 只有把投稿组织进合集的 UP 主才有数据；没有合集的账号返回空数组。
+ *   `seasonCount` 仍随返回值提供，便于测试与诊断，但不进入消息载荷。
  */
 export async function fetchSeasonVideos(
   mid: string,
@@ -247,24 +247,6 @@ export async function fetchSeasonVideos(
     }
   }
   return { seasonCount: seasons.length, seasonVideos: videos };
-}
-
-/**
- * 投稿数与粉丝数的比值，供展示和提示词使用。
- * 仅供面板展示与 AI 提示词使用。
- *
- * 粉丝数为 0 时返回 null：此时比值无定义，而「有投稿却 0 粉丝」这件事本身
- * 由面板直接显示粉丝数让人看见，不该塞进一个比值里假装它是数值。
- */
-export function archiveToFansRatio(card: AccountCardInfo): number | null {
-  if (
-    card.archiveCount === undefined ||
-    card.fans === undefined ||
-    card.fans === 0
-  ) {
-    return null;
-  }
-  return card.archiveCount / card.fans;
 }
 
 /** 清空名片缓存（测试用）。 */

@@ -14,24 +14,34 @@ function openSpacePage(uid: string): void {
 
 export type BlockBand = "suspicious" | "high";
 
+/**
+ * 单次批量拉黑上限。
+ *
+ * B 站关系接口是网页端自用的非公开接口，连续快速调用几十次容易触发风控。
+ * 单次最多处理 10 个；完成后页面会刷新，可以再打开弹窗处理其余账号。
+ */
+export const MAX_BLOCK_BATCH = 10;
+
 /** 这一档里可以拉黑的账号：去掉白名单和本地已拉黑。 */
 export function blockTargetsForBand(
   accounts: readonly PageAccountSummary[],
   band: BlockBand,
   blockedKeys: ReadonlySet<string>,
 ): PageAccountSummary[] {
-  return accounts.filter((account) => {
-    if (account.review.kind !== "ai" || account.disposition === "whitelisted") {
-      return false;
-    }
-    if (blockedKeys.has(account.accountKey)) {
-      return false;
-    }
-    const probability = account.review.review.marketingProbability;
-    return band === "high"
-      ? probability >= 80
-      : probability >= 60 && probability < 80;
-  });
+  return accounts
+    .filter((account) => {
+      if (account.review.kind !== "ai" || account.disposition === "whitelisted") {
+        return false;
+      }
+      if (blockedKeys.has(account.accountKey)) {
+        return false;
+      }
+      const probability = account.review.review.marketingProbability;
+      return band === "high"
+        ? probability >= 80
+        : probability >= 60 && probability < 80;
+    })
+    .slice(0, MAX_BLOCK_BATCH);
 }
 
 export function PopupApp(): React.JSX.Element {
@@ -353,14 +363,14 @@ export function PopupApp(): React.JSX.Element {
             <SummaryCard
               label="60–79"
               value={counts.suspicious}
-              blockLabel="拉黑本页概率 60–79、尚未拉黑且不在白名单的账号"
+              blockLabel={`拉黑本页概率 60–79、尚未拉黑且不在白名单的账号（单次最多 ${MAX_BLOCK_BATCH} 个）`}
               blockDisabled={counts.blockSuspicious.length === 0 || blocking}
               onBlock={() => openBlockPick("suspicious")}
             />
             <SummaryCard
               label="80 以上"
               value={counts.high}
-              blockLabel="拉黑本页概率 80 以上、尚未拉黑且不在白名单的账号"
+              blockLabel={`拉黑本页概率 80 以上、尚未拉黑且不在白名单的账号（单次最多 ${MAX_BLOCK_BATCH} 个）`}
               blockDisabled={counts.blockHigh.length === 0 || blocking}
               onBlock={() => openBlockPick("high")}
             />
@@ -555,7 +565,8 @@ function BlockPick(props: {
         <span>已选 {chosen}</span>
       </div>
       <p className="block-pick-note">
-        已拉黑和白名单不包含在内。拉黑是平台动作，可在 B 站设置或本插件的「取消拉黑」中撤销。
+        单次最多拉黑 {MAX_BLOCK_BATCH} 个；已拉黑和白名单不包含在内。拉黑是平台动作，可在
+        B 站设置或本插件的「取消拉黑」中撤销。完成后刷新页面可继续处理其余账号。
       </p>
       <div className="block-pick-list">
         {props.accounts.map((account) => {

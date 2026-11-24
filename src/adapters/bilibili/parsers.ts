@@ -105,6 +105,20 @@ export function parsePublishedAt(
     return nowMs;
   }
 
+  // 「昨天 / 前天」是卡片上常见的整日文案；带具体时刻的「昨天 12:30」
+  // 仍按无法确认处理，避免伪造不存在的分钟数。
+  if (normalized === "昨天") {
+    return nowMs - 24 * 60 * 60_000;
+  }
+  if (normalized === "前天") {
+    return nowMs - 2 * 24 * 60 * 60_000;
+  }
+
+  const seconds = /^(\d+)\s*秒前$/u.exec(normalized)?.[1];
+  if (seconds !== undefined) {
+    return nowMs - Number(seconds) * 1_000;
+  }
+
   const minutes = /^(\d+)\s*分钟前$/u.exec(normalized)?.[1];
   if (minutes !== undefined) {
     return nowMs - Number(minutes) * 60_000;
@@ -118,6 +132,23 @@ export function parsePublishedAt(
   const days = /^(\d+)\s*天前$/u.exec(normalized)?.[1];
   if (days !== undefined) {
     return nowMs - Number(days) * 24 * 60 * 60_000;
+  }
+
+  const weeks = /^(\d+)\s*周前$/u.exec(normalized)?.[1];
+  if (weeks !== undefined) {
+    return nowMs - Number(weeks) * 7 * 24 * 60 * 60_000;
+  }
+
+  // 月/年按近似值换算：只用于「投稿节奏」这类粗粒度信号，
+  // 不参与任何精确时间计算。
+  const months = /^(\d+)\s*个月前$/u.exec(normalized)?.[1];
+  if (months !== undefined) {
+    return nowMs - Number(months) * 30 * 24 * 60 * 60_000;
+  }
+
+  const years = /^(\d+)\s*年前$/u.exec(normalized)?.[1];
+  if (years !== undefined) {
+    return nowMs - Number(years) * 365 * 24 * 60 * 60_000;
   }
 
   // 完整日期：按本地时区构造，构造结果回读校验可排除非法日期（如 2 月 30 日）。

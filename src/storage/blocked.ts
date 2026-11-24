@@ -5,25 +5,13 @@
  * 本地只需要「什么时候拉黑了谁、由哪次判定触发」，用于面板显示状态、
  * 设置页审计，以及误拉黑后快速定位。上限 200 条，超出丢最旧。
  */
-import type { AccountKey } from "../domain/types";
+import type { AccountKey, BlockedEntry } from "../domain/types";
 
 /** 本地存储键。 */
 export const BLOCKED_STORAGE_KEY = "kcf:blocked:v1";
 
-/** 单条拉黑记录。 */
-export interface BlockedEntry {
-  accountKey: AccountKey;
-  uid: string;
-  /** 拉黑时的账号昵称（可能缺失）。 */
-  displayName?: string;
-  /**
-   * 拉黑时该账号的 AI 概率快照，便于事后复盘误拉黑。
-   * 可空：用户可能是凭自己的判断拉黑的，账号从未被 AI 判定过。
-   */
-  aiProbability?: number;
-  /** 发起拉黑的时间戳。 */
-  blockedAtMs: number;
-}
+/** 拉黑记录类型定义在 domain 层；这里保留 re-export，兼容既有导入。 */
+export type { BlockedEntry };
 
 /** 读取全部拉黑记录（按时间降序，最近在前）。 */
 export async function getBlockedAccounts(): Promise<BlockedEntry[]> {
@@ -62,6 +50,16 @@ export async function removeBlockedAccount(
   const merged = entries.filter((item) => item.accountKey !== accountKey);
   await chrome.storage.local.set({ [BLOCKED_STORAGE_KEY]: merged });
   return merged;
+}
+
+/**
+ * 清空全部拉黑记录（「重置插件」使用）。
+ *
+ * 拉黑记录不在 local-state 的 STORAGE_KEYS 里，必须单独清除；否则重置后
+ * 面板仍会把账号显示成「已拉黑」，与「重置插件」的语义不符。
+ */
+export async function clearBlockedAccounts(): Promise<void> {
+  await chrome.storage.local.remove(BLOCKED_STORAGE_KEY);
 }
 
 /** 拉黑记录上限：超出丢弃最旧的。 */

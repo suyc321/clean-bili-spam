@@ -305,6 +305,26 @@ describe("批量拉黑名单", () => {
       "3",
     ]);
   });
+
+  it("单次最多返回 10 个目标，避免连续打满平台接口", () => {
+    const accounts = Array.from({ length: 12 }, (_, index) =>
+      account(String(index + 1), 90, "none"),
+    );
+    const targets = blockTargetsForBand(accounts, "high", new Set());
+    expect(targets).toHaveLength(10);
+    expect(targets.map((item) => item.uid)).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+    ]);
+  });
 });
 
 function account(

@@ -329,7 +329,7 @@ export async function importBundle(
   return normalized;
 }
 
-/** 清除全部用户状态（不含 IndexedDB 观察库）。 */
+/** 清除设置与三类处置名单（不含拉黑记录与 IndexedDB 观察库）。 */
 export async function resetUserData(): Promise<void> {
   await chrome.storage.local.remove(Object.values(STORAGE_KEYS));
 }

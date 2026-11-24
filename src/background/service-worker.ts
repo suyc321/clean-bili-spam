@@ -40,9 +40,14 @@ import {
   resetUserData,
   setAccountDisposition,
 } from "../storage/local-state";
+import { clearBlockedAccounts } from "../storage/blocked";
+import { forEachConcurrent } from "./concurrency";
 
 // 写操作共享同一条 Promise 链：前一个写完成后才开始下一个，避免并发写坏数据。
 let stateWriteQueue: Promise<void> = Promise.resolve();
+// AI 判定单独串行：保留「一次只跑一个外发请求」的成本控制，但不占写队列，
+// 否则一次最长 30 秒的接口调用会把所有读操作一起堵住。
+let aiReviewQueue: Promise<void> = Promise.resolve();
 
 chrome.runtime.onInstalled.addListener(() => {
   console.info("[B站内容净化助手] 插件已安装，所有识别数据默认保存在本地。");
@@ -115,14 +120,35 @@ async function runRequest(request: RuntimeRequest): Promise<unknown> {
     await stateWriteQueue;
     return routeRequest(request);
   }
+  return withStateWrite(() => routeRequest(request));
+}
 
-  const operation = stateWriteQueue.then(() => routeRequest(request));
-  // 队列尾部吞掉错误（operation 内部已兜底），避免断链阻塞后续写。
-  stateWriteQueue = operation.then(
+/** 把一段状态写入追加到串行队列尾部。 */
+function withStateWrite<T>(operation: () => Promise<T>): Promise<T> {
+  const result = stateWriteQueue.then(operation);
+  // 队列尾部吞掉错误（调用方自行处理 result），避免断链阻塞后续写。
+  stateWriteQueue = result.then(
     () => undefined,
     () => undefined,
   );
-  return operation;
+  return result;
+}
+
+/**
+ * AI 判定串行槽。
+ *
+ * 与写队列分开：外发请求最长 30 秒，批量入口最长 5 分钟，放进写队列会让
+ * dashboard.get / relation.prepare / export 等读操作一起等待。这里只保证
+ * 同一时间只有一个 AI 请求，成本控制与原来一致；真正的入库写入由
+ * reviewAccountWithAi 通过 withStateWrite 单独锁住。
+ */
+function withAiReviewSlot<T>(operation: () => Promise<T>): Promise<T> {
+  const result = aiReviewQueue.then(operation);
+  aiReviewQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
 /** 判断消息类型是否会产生状态写入。 */
@@ -135,8 +161,6 @@ function requestWritesState(request: RuntimeRequest): boolean {
     case "data.reset":
     case "audit.clear":
     case "observations.clear":
-    case "ai.review.run": // 复核结论写入 ai_reviews，并追加一条审计
-    case "ai.review.batch": // 同上，批量逐个写入
       return true;
     case "dashboard.get":
     case "export.create":
@@ -145,6 +169,8 @@ function requestWritesState(request: RuntimeRequest): boolean {
     case "relation.prepare": // 只读：返回 CSRF 令牌，不产生状态写入
     case "ai.config.test": // 只读连通性测试，不产生状态写入
     case "ai.models.list": // 只读：拉模型目录，不写入设置
+    case "ai.review.run": // 主体是外发请求；入库写入由 withStateWrite 单独排队
+    case "ai.review.batch": // 同上，批量逐个执行
     case "observation.export":
       return false;
     default:
@@ -174,12 +200,17 @@ async function routeRequest(request: RuntimeRequest): Promise<unknown> {
       return buildDashboardState();
     case "ai.review.run":
       // 内容脚本发起的 AI 判定（滚动自动排队或面板再判）：结论入库后按 ingest 同构返回。
+      // 外发请求在写队列之外；只有入库写入经过 withStateWrite。
       return {
-        analyses: await reviewAccountWithAi(request.payload.accountKey),
+        analyses: await withAiReviewSlot(() =>
+          reviewAccountWithAi(request.payload.accountKey, withStateWrite),
+        ),
       };
     case "ai.review.batch":
       // 协议保留的批量入口。弹出页不走这里，而是逐个发 ai.review.run。
-      return reviewAccountsWithAi(request.payload.accountKeys);
+      return withAiReviewSlot(() =>
+        reviewAccountsWithAi(request.payload.accountKeys, withStateWrite),
+      );
     case "accountCard.get":
       return fetchAccountCards(request.payload.uids);
     case "account.openProfile":
@@ -207,7 +238,12 @@ async function routeRequest(request: RuntimeRequest): Promise<unknown> {
       return { bundle: await buildObservationExport() };
     case "data.reset":
       // 用户数据与观察库一起清空，保证「重置插件」的完整性。
-      await Promise.all([resetUserData(), clearObservationDatabase()]);
+      // 拉黑记录单独存在 storage/blocked，不在 local-state 的键集合里。
+      await Promise.all([
+        resetUserData(),
+        clearObservationDatabase(),
+        clearBlockedAccounts(),
+      ]);
       return buildDashboardState();
     case "audit.clear":
       await clearAiAudit();
@@ -234,7 +270,6 @@ interface CardPayload {
   fans?: number;
   archiveCount?: number;
   officialVerifyType?: number;
-  seasonCount?: number;
   seasonVideos?: Array<{
     bvid: string;
     title: string;
@@ -245,6 +280,9 @@ interface CardPayload {
   }>;
 }
 
+/** 名片补全的并发上限：每个账号最多两次请求（名片 + 合集）。 */
+const ACCOUNT_CARD_CONCURRENCY = 4;
+
 async function fetchAccountCards(uids: readonly string[]): Promise<{
   cards: Record<string, CardPayload>;
 }> {
@@ -254,30 +292,41 @@ async function fetchAccountCards(uids: readonly string[]): Promise<{
   if (!granted) {
     return { cards: {} };
   }
+  // 同一账号只请求一次；调用方可能把同一 UID 放进多个卡片。
+  const unique = [...new Set(uids)];
   const cards: Record<string, CardPayload> = {};
-  for (const uid of uids) {
-    const info = await fetchAccountCard(uid);
-    if (info === null) {
-      continue;
+  // 串行时 50 个账号最多 100 次网络往返，会把整轮扫描拖到几十秒。
+  // 限流并发既缩短等待，也不至于一次打满 B 站接口。
+  await forEachConcurrent(unique, ACCOUNT_CARD_CONCURRENCY, async (uid) => {
+    try {
+      const info = await fetchAccountCard(uid);
+      if (info === null) {
+        return;
+      }
+      cards[uid] = {
+        ...(info.name === undefined ? {} : { name: info.name }),
+        ...(info.sign === undefined ? {} : { sign: info.sign }),
+        ...(info.fans === undefined ? {} : { fans: info.fans }),
+        ...(info.archiveCount === undefined
+          ? {}
+          : { archiveCount: info.archiveCount }),
+        ...(info.officialVerifyType === undefined
+          ? {}
+          : { officialVerifyType: info.officialVerifyType }),
+        // 合集内投稿只在非空时透传，避免无意义地放大消息体。
+        // seasonCount 当前不进入消息载荷（面板与提示词都没用它）。
+        ...(info.seasonVideos.length === 0
+          ? {}
+          : { seasonVideos: info.seasonVideos }),
+      };
+    } catch (error) {
+      // 单个账号失败不影响其余补全：这是可选增强。
+      console.warn(
+        `[B站内容净化助手] ${uid} 公开名片补全失败`,
+        error,
+      );
     }
-    cards[uid] = {
-      ...(info.name === undefined ? {} : { name: info.name }),
-      ...(info.sign === undefined ? {} : { sign: info.sign }),
-      ...(info.fans === undefined ? {} : { fans: info.fans }),
-      ...(info.archiveCount === undefined
-        ? {}
-        : { archiveCount: info.archiveCount }),
-      ...(info.officialVerifyType === undefined
-        ? {}
-        : { officialVerifyType: info.officialVerifyType }),
-      // 合集数量与合集内投稿：seasonCount 恒为数字（0 表示没有合集），
-      // seasonVideos 只在非空时透传，避免无意义地放大消息体。
-      seasonCount: info.seasonCount,
-      ...(info.seasonVideos.length === 0
-        ? {}
-        : { seasonVideos: info.seasonVideos }),
-    };
-  }
+  });
   return { cards };
 }
 

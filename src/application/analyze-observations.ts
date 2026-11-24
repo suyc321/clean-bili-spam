@@ -180,6 +180,9 @@ async function buildAccountAnalysis(input: {
     ...(input.profile.archiveCount === undefined
       ? {}
       : { archiveCount: input.profile.archiveCount }),
+    ...(input.profile.officialVerifyType === undefined
+      ? {}
+      : { officialVerifyType: input.profile.officialVerifyType }),
     observedVideos: input.videos.length,
     hasBio:
       input.profile.profileBio !== undefined &&
@@ -262,15 +265,29 @@ export async function analyzeObservations(
 }
 
 /**
+ * 状态写入门：把「写存储」这一段交给调用方的串行队列。
+ *
+ * 默认实现直接执行，便于测试与不关心并发的调用方。Service Worker 会传入
+ * 自己的写队列，从而只锁住真正的入库写入，不把最长 30 秒的 AI 网络请求
+ * 一起关进队列——否则所有读操作都要等这次外发请求结束。
+ */
+export type StateWriteGate = <T>(operation: () => Promise<T>) => Promise<T>;
+
+const runWriteDirectly: StateWriteGate = (operation) => operation();
+
+/**
  * 手动触发的 AI 判定用例：从本地库取账号数据，调用用户配置的
  * 接口，把结论入库并重新组装判定。
  *
  * 失败语义：任何一步失败都抛错（由消息层转错误响应），不写入新结论。
  *
+ * @param accountKey 目标账号
+ * @param write 状态写入门；网络请求在其之外执行，只有入库写入经过它
  * @returns 包含该账号最新分析结果的单元素数组（与 ingest 响应同构）
  */
 export async function reviewAccountWithAi(
   accountKey: AccountKey,
+  write: StateWriteGate = runWriteDirectly,
 ): Promise<AccountAnalysis[]> {
   const settings = await getSettings();
   if (!settings.aiEnabled) {
@@ -326,21 +343,29 @@ export async function reviewAccountWithAi(
   // 调用外部接口并落库；成功后才组装带 AI 结论的分析结果。
   let aiReview!: Awaited<ReturnType<typeof requestAiReview>>;
   try {
+    // 网络请求刻意放在写队列之外：它最长 30 秒，放进队列会让所有读操作
+    // 一起等（打开设置页、拉黑准备、导出都会被卡住）。
     aiReview = await requestAiReview(settings, profile, videos);
-    await putAiReview(aiReview);
-    await addAiAuditEntry({
-      ...auditBase,
-      outcome: "success",
-      marketingProbability: aiReview.marketingProbability,
-      model: aiReview.model,
-      effectiveEndpointOrigin: safeOrigin(settings.aiEndpoint),
+    // 只有入库这一段需要串行，避免与其他写操作交错。
+    await write(async () => {
+      await putAiReview(aiReview);
+      await addAiAuditEntry({
+        ...auditBase,
+        outcome: "success",
+        marketingProbability: aiReview.marketingProbability,
+        model: aiReview.model,
+        effectiveEndpointOrigin: safeOrigin(settings.aiEndpoint),
+      });
     });
   } catch (error) {
-    await addAiAuditEntry({
-      ...auditBase,
-      outcome: "error",
-      errorMessage:
-        error instanceof Error ? error.message.slice(0, 200) : "未知错误",
+    // 失败审计同样只锁写入这一小段；审计失败不能覆盖原始错误。
+    await write(async () => {
+      await addAiAuditEntry({
+        ...auditBase,
+        outcome: "error",
+        errorMessage:
+          error instanceof Error ? error.message.slice(0, 200) : "未知错误",
+      }).catch(() => undefined);
     }).catch(() => undefined);
     throw error;
   }
@@ -387,10 +412,12 @@ function safeOrigin(endpoint: string): string {
  * （这属于调用方误用）。
  *
  * @param accountKeys 账号清单（调用方已去重，最多 10 个）
+ * @param write 状态写入门；每个账号的入库写入经过它，网络请求在其之外
  * @returns 成功复核的分析结果与被跳过的账号数
  */
 export async function reviewAccountsWithAi(
   accountKeys: readonly AccountKey[],
+  write: StateWriteGate = runWriteDirectly,
 ): Promise<{ analyses: AccountAnalysis[]; skipped: number }> {
   const settings = await getSettings();
   if (!settings.aiEnabled) {
@@ -415,7 +442,7 @@ export async function reviewAccountsWithAi(
   let skipped = 0;
   for (const accountKey of accountKeys) {
     try {
-      analyses.push(...(await reviewAccountWithAi(accountKey)));
+      analyses.push(...(await reviewAccountWithAi(accountKey, write)));
     } catch (error) {
       // 单个账号失败不中断整批，但必须留下原因：以前这里空 catch，
       // 页面控制台和弹窗都看不到，按钮会一直停在「判定中」。

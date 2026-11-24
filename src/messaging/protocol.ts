@@ -404,8 +404,6 @@ export interface RequestMap {
           fans?: number;
           archiveCount?: number;
           officialVerifyType?: number;
-          /** 合集数量（0 表示没有合集）。 */
-          seasonCount?: number;
           /**
            * 从合集拿到的投稿：作为额外观察记录入库，让首页也能算出
            * 投稿频率、模板相似度、主题跨度、互动率这些需要多样本的信号。

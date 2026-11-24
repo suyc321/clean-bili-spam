@@ -33,6 +33,17 @@ describe("推荐流强插卡片", () => {
     expect(isForcedFeedCard(element)).toBe(true);
   });
 
+  it("独立直播卡也会被遮挡", () => {
+    const live = feedCard(
+      "bili-live-card",
+      '<a href="https://live.bilibili.com/1000001">直播</a>',
+    );
+    syncFeedAdCovers(document, "cover", "dark");
+    expect(
+      live.querySelector('.kcf-card-cover[data-kind="ad"]'),
+    ).not.toBeNull();
+  });
+
   it("番剧强插是 floor-single-card，指向番剧播放页", () => {
     const element = feedCard(
       "floor-single-card",
@@ -84,7 +95,7 @@ describe("推荐流强插卡片", () => {
     expect(
       ad.querySelector('.kcf-card-cover[data-kind="ad"]')?.shadowRoot
         ?.textContent,
-    ).toContain("已遮挡广告");
+    ).toContain("已遮挡广告/强插");
     expect(live.querySelector('.kcf-card-cover[data-kind="ad"]')).not.toBeNull();
     expect(video.querySelector(".kcf-card-cover")).toBeNull();
 
