@@ -1,6 +1,6 @@
 {
   "name": "clean-bili-spam",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "用户可控、可解释的 B 站低质量账号识别浏览器插件。",

@@ -63,7 +63,7 @@ function chromeStub(): object {
       },
     },
     runtime: {
-      getManifest: () => ({ version: "0.4.0" }),
+      getManifest: () => ({ version: "0.5.0" }),
       sendMessage: async (message: unknown) => {
         runtimeMessages.push(message);
         return { protocolVersion: 1, requestId: "r", ok: true, data: {} };
