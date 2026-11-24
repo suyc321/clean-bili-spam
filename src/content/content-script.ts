@@ -45,7 +45,7 @@ import {
   type CardPayload,
 } from "./card-enrichment";
 import { ensureCardCover, removeCardCover } from "./card-cover";
-import { syncFeedAdCovers } from "./feed-ad-cover";
+import { AD_COVER_SELECTOR, syncAdCovers } from "./feed-ad-cover";
 import { summarizePageCards } from "./page-stats";
 
 /** 最近一次扫描结果，AI 判定写回后用来重算弹出页摘要。 */
@@ -121,7 +121,7 @@ async function initialize(): Promise<void> {
     console.warn("[B站内容净化助手] 无法读取设置，使用默认值。", error);
   }
   coverReady = true;
-  syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
+  syncAdCovers(document, settings.feedAdMode, settings.coverColor);
   // 同步本地拉黑记录，让面板按钮显示「取消拉黑」状态。
   try {
     refreshBlockedAccounts(
@@ -131,17 +131,15 @@ async function initialize(): Promise<void> {
     console.warn("[B站内容净化助手] 无法读取拉黑记录。", error);
   }
 
-  syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
+  syncAdCovers(document, settings.feedAdMode, settings.coverColor);
   await scanAndRender(true);
 }
 
 const WATCHED_CARD_SELECTOR =
   ".bili-video-card, .bili-live-card, .bili-feed-card, .floor-single-card";
-const FEED_COVER_SELECTOR =
-  ".bili-feed-card, .floor-single-card, .bili-live-card";
 
 /** 新格子或链接一出现就盖，不等待扫描防抖。 */
-function refreshFeedCoverFrom(node: Node): void {
+function refreshAdCoverFrom(node: Node): void {
   if (!coverReady || !(node instanceof Element)) {
     return;
   }
@@ -150,15 +148,15 @@ function refreshFeedCoverFrom(node: Node): void {
     if (!(card instanceof HTMLElement) || seen.has(card)) {
       return;
     }
-    if (!card.matches(FEED_COVER_SELECTOR)) {
+    if (!card.matches(AD_COVER_SELECTOR)) {
       return;
     }
     seen.add(card);
-    syncFeedAdCovers(card, settings.feedAdMode, settings.coverColor);
+    syncAdCovers(card, settings.feedAdMode, settings.coverColor);
   };
   refresh(node);
-  refresh(node.closest(FEED_COVER_SELECTOR));
-  for (const card of node.querySelectorAll(FEED_COVER_SELECTOR)) {
+  refresh(node.closest(AD_COVER_SELECTOR));
+  for (const card of node.querySelectorAll(AD_COVER_SELECTOR)) {
     refresh(card);
   }
 }
@@ -175,7 +173,7 @@ function observePageChanges(): void {
     let relevant = false;
     for (const mutation of mutations) {
       if (mutation.type === "attributes") {
-        refreshFeedCoverFrom(mutation.target);
+        refreshAdCoverFrom(mutation.target);
         continue;
       }
       for (const node of mutation.addedNodes) {
@@ -194,7 +192,7 @@ function observePageChanges(): void {
             relevant = true;
           }
         }
-        refreshFeedCoverFrom(node);
+        refreshAdCoverFrom(node);
       }
     }
     if (relevant || location.href !== previousUrl) {
@@ -233,7 +231,7 @@ function observeSettingsChanges(): void {
         : {},
     );
     coverReady = true;
-    syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
+    syncAdCovers(document, settings.feedAdMode, settings.coverColor);
     pendingSettingsRefresh = true;
     void scanAndRender(true);
   });
@@ -448,7 +446,7 @@ async function scanAndRender(force: boolean): Promise<void> {
     // 长列表会移除/复用卡片：先清掉脱离文档的登记，避免 Map 只增不减。
     pruneDetachedCards();
     // 盖广告不依赖本轮的名片补全、入库和 AI。先盖，再做那些事。
-    syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
+    syncAdCovers(document, settings.feedAdMode, settings.coverColor);
     // SPA 路由变化后清空缓存：旧页面的分析结果对新区不再可靠。
     if (location.href !== previousUrl) {
       previousUrl = location.href;
@@ -469,7 +467,7 @@ async function scanAndRender(force: boolean): Promise<void> {
     // 广告遮罩仍要按当前开关对齐：设置变更若撞上正在进行的扫描，
     // 补扫可能走到这里，不能把刚打开的遮挡漏掉。
     if (!force && pendingCards.size === 0) {
-      syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
+      syncAdCovers(document, settings.feedAdMode, settings.coverColor);
       return;
     }
     const candidates =
@@ -548,7 +546,7 @@ async function scanAndRender(force: boolean): Promise<void> {
       renderRegisteredCards();
     }
 
-    syncFeedAdCovers(document, settings.feedAdMode, settings.coverColor);
+    syncAdCovers(document, settings.feedAdMode, settings.coverColor);
 
     lastScanResult = result;
     summary = buildPageSummary(result, renderedCards, analyses);

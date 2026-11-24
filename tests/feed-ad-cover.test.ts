@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   isForcedFeedCard,
-  syncFeedAdCovers,
+  syncAdCovers,
 } from "../src/content/feed-ad-cover";
 
 function feedCard(className: string, html: string): HTMLElement {
@@ -38,7 +38,7 @@ describe("推荐流强插卡片", () => {
       "bili-live-card",
       '<a href="https://live.bilibili.com/1000001">直播</a>',
     );
-    syncFeedAdCovers(document, "cover", "dark");
+    syncAdCovers(document, "cover", "dark");
     expect(
       live.querySelector('.kcf-card-cover[data-kind="ad"]'),
     ).not.toBeNull();
@@ -91,7 +91,7 @@ describe("推荐流强插卡片", () => {
       '<a href="https://www.bilibili.com/video/BV1xx411c7mD">视频</a>',
     );
 
-    syncFeedAdCovers(document, "cover", "dark");
+    syncAdCovers(document, "cover", "dark");
     expect(
       ad.querySelector('.kcf-card-cover[data-kind="ad"]')?.shadowRoot
         ?.textContent,
@@ -99,10 +99,10 @@ describe("推荐流强插卡片", () => {
     expect(live.querySelector('.kcf-card-cover[data-kind="ad"]')).not.toBeNull();
     expect(video.querySelector(".kcf-card-cover")).toBeNull();
 
-    syncFeedAdCovers(document, "cover", "dark");
+    syncAdCovers(document, "cover", "dark");
     expect(ad.querySelectorAll(".kcf-card-cover")).toHaveLength(1);
 
-    syncFeedAdCovers(document, "off", "dark");
+    syncAdCovers(document, "off", "dark");
     expect(ad.querySelector(".kcf-card-cover")).toBeNull();
     expect(live.querySelector(".kcf-card-cover")).toBeNull();
   });
@@ -117,17 +117,17 @@ describe("推荐流强插卡片", () => {
       '<a href="https://www.bilibili.com/video/BV1xx411c7mD">视频</a>',
     );
 
-    syncFeedAdCovers(document, "remove", "dark");
+    syncAdCovers(document, "remove", "dark");
     expect(ad.style.display).toBe("none");
     expect(ad.querySelector(".kcf-card-cover")).toBeNull();
     expect(video.style.display).toBe("");
 
     // 隐藏中仍能识别链接：切回遮挡档时同一张卡盖上遮罩并恢复显示。
-    syncFeedAdCovers(document, "cover", "dark");
+    syncAdCovers(document, "cover", "dark");
     expect(ad.style.display).toBe("");
     expect(ad.querySelector('.kcf-card-cover[data-kind="ad"]')).not.toBeNull();
 
-    syncFeedAdCovers(document, "off", "dark");
+    syncAdCovers(document, "off", "dark");
     expect(ad.style.display).toBe("");
     expect(ad.querySelector(".kcf-card-cover")).toBeNull();
   });
@@ -137,11 +137,11 @@ describe("推荐流强插卡片", () => {
       "bili-feed-card",
       '<a href="https://cm.bilibili.com/cm/api/fees/pc/sync/v2?p=ad_card">广告</a>',
     );
-    syncFeedAdCovers(document, "cover", "light");
+    syncAdCovers(document, "cover", "light");
     const host = ad.querySelector<HTMLElement>(".kcf-card-cover");
     expect(host?.dataset.color).toBe("light");
 
-    syncFeedAdCovers(document, "cover", "gray");
+    syncAdCovers(document, "cover", "gray");
     const rebuilt = ad.querySelector<HTMLElement>(".kcf-card-cover");
     expect(rebuilt?.dataset.color).toBe("gray");
     expect(rebuilt).not.toBe(host);
@@ -152,7 +152,7 @@ describe("推荐流强插卡片", () => {
       "bili-feed-card",
       '<a href="https://cm.bilibili.com/cm/api/fees/pc/sync/v2?p=ad_card">广告</a>',
     );
-    syncFeedAdCovers(ad, "cover", "dark");
+    syncAdCovers(ad, "cover", "dark");
     expect(ad.querySelector(".kcf-card-cover")).not.toBeNull();
   });
 });

@@ -553,7 +553,7 @@ export function OptionsApp(): React.JSX.Element {
                       <div className="setting-copy">
                         <h2>广告和强插</h2>
                         <p>
-                          首页推荐里没有投稿链接的卡片，可遮挡或直接从页面隐藏。
+                          首页推荐和视频页里的推广/强插，可遮挡或直接从页面隐藏。
                         </p>
                       </div>
                       <div className="seg" role="group" aria-label="广告和强插处理">
