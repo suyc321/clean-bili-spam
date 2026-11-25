@@ -17,6 +17,13 @@ import type {
   ExtensionSettings,
   VideoObservationRecord,
 } from "../domain/types";
+import {
+  isOpenCodeEndpoint,
+  normalizeOpenCodeModelId,
+  openCodeSessionId,
+  resolveOpenCodeModelsUrl,
+  resolveOpenCodeRequestUrl,
+} from "./opencode-endpoint";
 
 /**
  * 提示词版本：改动 system/user 提示词时必须递增，并写入 AI 审计记录。
@@ -280,6 +287,11 @@ function resolveRequestUrl(
   endpoint: string,
   format: AiApiFormat,
 ): string {
+  // OpenCode 的协议前缀与通用拼接不同（/anthropic/v1/messages 等）。
+  const openCodeUrl = resolveOpenCodeRequestUrl(endpoint, format);
+  if (openCodeUrl !== undefined) {
+    return openCodeUrl;
+  }
   const base = endpoint.trim().replace(/\/+$/u, "");
   const suffix = format === "anthropic"
     ? "/messages"
@@ -294,20 +306,33 @@ function buildRequest(
   config: AiEndpointConfig,
   messages: ChatMessage[],
   maxTokens?: number,
+  sessionId?: string,
 ): { url: string; headers: Record<string, string>; body: string } {
   const format = config.aiFormat ?? "openai_chat";
   const url = resolveRequestUrl(config.aiEndpoint, format);
-  const model = config.aiModel.trim();
+  // 用户可能粘贴 OpenCode 配置里的 `opencode-go/<id>`，网关只认裸 ID。
+  const model = normalizeOpenCodeModelId(
+    config.aiModel.trim(),
+    config.aiEndpoint,
+  );
   const key = config.aiApiKey.trim();
+  const openCode = isOpenCodeEndpoint(config.aiEndpoint);
+  // Go 订阅缺少这个头会直接 400 MissingSessionID；非 OpenCode 地址不带。
+  const sessionHeaders: Record<string, string> = openCode
+    ? { "x-opencode-session": sessionId ?? openCodeSessionId("probe") }
+    : {};
 
   if (format === "anthropic") {
     return {
       url,
       // Anthropic 原生用 x-api-key + anthropic-version，不是 Bearer。
+      // OpenCode 两种鉴权都接受，额外带 Bearer，兼容只认 Authorization 的网关。
       headers: {
         "content-type": "application/json",
         "x-api-key": key,
         "anthropic-version": "2023-06-01",
+        ...(openCode ? { authorization: `Bearer ${key}` } : {}),
+        ...sessionHeaders,
       },
       body: JSON.stringify({
         model,
@@ -335,6 +360,7 @@ function buildRequest(
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${key}`,
+        ...sessionHeaders,
       },
       body: JSON.stringify({
         model,
@@ -357,6 +383,7 @@ function buildRequest(
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${key}`,
+      ...sessionHeaders,
     },
     body: JSON.stringify({
       model,
@@ -483,7 +510,13 @@ async function callOnce(
     videos,
     config.aiJudgmentCriteria,
   );
-  const request = buildRequest(config, messages);
+  const request = buildRequest(
+    config,
+    messages,
+    undefined,
+    // 同一账号复用会话 ID，便于网关归并与提示词缓存命中。
+    openCodeSessionId(profile.accountKey),
+  );
   // 仅在用户于设置页打开「打印判定往来」时，才在 finally 里把请求与响应打到后台控制台。
   let responsePayload: unknown;
 
@@ -663,6 +696,11 @@ function modelListAttempts(
 
 /** 把设置页保存的基址拼成模型目录地址。已经以 `/models` 结尾则原样使用。 */
 export function modelsListUrl(endpoint: string): string {
+  // OpenCode 的目录不在协议前缀下（`.../anthropic/models` 是 404）。
+  const openCodeUrl = resolveOpenCodeModelsUrl(endpoint);
+  if (openCodeUrl !== undefined) {
+    return openCodeUrl;
+  }
   const base = endpoint.trim().replace(/\/+$/u, "");
   return base.endsWith("/models") ? base : `${base}/models`;
 }
@@ -727,6 +765,8 @@ export async function testAiConnection(
     [{ role: "user", content: "ping" }],
     // 连通性测试只要最小的成功响应：max_tokens=1（Anthropic 同名参数）。
     1,
+    // 测试请求不属于任何账号，用固定种子生成一次性会话 ID。
+    openCodeSessionId("connection-test"),
   );
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);

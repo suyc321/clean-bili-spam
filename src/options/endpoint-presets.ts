@@ -11,6 +11,13 @@ export const ENDPOINT_PRESETS: readonly EndpointPreset[] = [
   { name: "OpenAI", endpoint: "https://api.openai.com/v1", format: "openai_chat" },
   { name: "Anthropic", endpoint: "https://api.anthropic.com/v1", format: "anthropic" },
   {
+    // OpenCode Go 订阅的 Claude 兼容基址。插件会自动补成
+    // /anthropic/v1/messages，并带上 Go 必需的 x-opencode-session。
+    name: "OpenCode Go",
+    endpoint: "https://opencode.ai/inference/go/anthropic",
+    format: "anthropic",
+  },
+  {
     name: "Google Gemini",
     endpoint: "https://generativelanguage.googleapis.com/v1beta/openai",
     format: "openai_chat",
@@ -34,10 +41,27 @@ export const ENDPOINT_PRESETS: readonly EndpointPreset[] = [
   },
   { name: "硅基流动", endpoint: "https://api.siliconflow.cn/v1", format: "openai_chat" },
   {
-    name: "腾讯混元",
+    // 腾讯把混元并入 TokenHub：旧地址 api.hunyuan.cloud.tencent.com 仅剩历史
+    // Key 可用，官方文档已统一到 tokenhub.tencentmaas.com。
+    name: "腾讯混元（TokenHub）",
+    endpoint: "https://tokenhub.tencentmaas.com/v1",
+    format: "openai_chat",
+  },
+  {
+    // 历史混元 API Key 仍走这个地址，保留给已经配好的用户。
+    name: "腾讯混元（旧版）",
     endpoint: "https://api.hunyuan.cloud.tencent.com/v1",
     format: "openai_chat",
   },
-  { name: "MiniMax", endpoint: "https://api.minimaxi.com/v1", format: "openai_chat" },
+  {
+    name: "MiniMax（国内）",
+    endpoint: "https://api.minimax.cn/v1",
+    format: "openai_chat",
+  },
+  {
+    name: "MiniMax（国际）",
+    endpoint: "https://api.minimax.io/v1",
+    format: "openai_chat",
+  },
   { name: "阶跃星辰", endpoint: "https://api.stepfun.com/step_plan/v1", format: "anthropic" },
 ];

@@ -40,6 +40,7 @@ B 站首页的推荐位和视频播放页里混着不少不是投稿的内容：
 **AI 判定（需要你自己的 AI 接口，默认关闭）**：
 
 - 在设置页填写接口地址、API Key、模型名和接口格式，可以测试连通性。支持 OpenAI Chat Completions、Anthropic Messages、OpenAI Responses 三种格式。
+- 内置常见服务商地址，也支持 OpenCode Go：接口地址填 `https://opencode.ai/inference/go/anthropic`，格式选 Anthropic Messages，模型名填 `claude-haiku-5-5` 这类模型 ID。插件会自动补全 `/anthropic/v1/messages` 路径，并带上 Go 必需的 `x-opencode-session` 请求头。
 - 配置后，滚动加载到的新账号会自动判定，一次一个；卡片上也可以手动再判一次。弹出页「AI 判定本页」一次最多处理 10 个还没有结论的账号。
 - 输出按固定格式校验：分类、概率、理由，以及模型自己声明的证据不足项。徽章显示概率，面板展示理由。
 - 结论只缓存在本机，7 天后过期。判定记录可查看，含提示词版本。

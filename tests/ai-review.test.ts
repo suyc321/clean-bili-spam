@@ -167,6 +167,76 @@ describe("AI 复核请求客户端", () => {
     );
   });
 
+  it("OpenCode Go 走 Anthropic 路径，并带上会话头与两种鉴权", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: [
+            {
+              type: "text",
+              text: '{"marketingProbability": 70, "category": "marketing", "reason": "理由", "insufficientData": []}',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    await requestAiReview(
+      {
+        aiEndpoint: "https://opencode.ai/inference/go/anthropic",
+        aiApiKey: "oc_sk_test",
+        aiModel: "opencode-go/claude-haiku-5-5",
+        aiFormat: "anthropic",
+      },
+      makeProfile(),
+      [makeVideo("标题甲")],
+      fetchImpl as unknown as typeof fetch,
+    );
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://opencode.ai/inference/go/anthropic/v1/messages",
+    );
+    // 网关只认裸模型 ID；配置里的 opencode-go/ 前缀会被去掉。
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: "claude-haiku-5-5",
+    });
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-opencode-session"]).toMatch(/^ses_[0-9a-f]{32}$/u);
+    expect(headers.authorization).toBe("Bearer oc_sk_test");
+    expect(headers["x-api-key"]).toBe("oc_sk_test");
+  });
+
+  it("普通 Anthropic 地址不带 OpenCode 会话头", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          content: [
+            {
+              type: "text",
+              text: '{"marketingProbability": 10, "category": "normal", "reason": "正常", "insufficientData": []}',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    await requestAiReview(
+      {
+        aiEndpoint: "https://api.anthropic.com/v1",
+        aiApiKey: "sk-ant",
+        aiModel: "claude-test",
+        aiFormat: "anthropic",
+      },
+      makeProfile(),
+      [makeVideo("标题甲")],
+      fetchImpl as unknown as typeof fetch,
+    );
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-opencode-session"]).toBeUndefined();
+    expect(headers.authorization).toBeUndefined();
+  });
+
   it("接口返回非 2xx 时抛错", async () => {
     const fetchImpl = vi
       .fn()

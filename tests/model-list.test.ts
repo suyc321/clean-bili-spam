@@ -18,6 +18,37 @@ describe("模型目录", () => {
     );
   });
 
+  it("OpenCode 的模型目录在网关根下，不在协议前缀下", () => {
+    expect(
+      modelsListUrl("https://opencode.ai/inference/go/anthropic"),
+    ).toBe("https://opencode.ai/inference/go/v1/models");
+  });
+
+  it("OpenCode 用 Anthropic 配置也能拉到模型目录", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({ data: [{ id: "claude-haiku-5-5" }] }),
+    );
+    const models = await listAiModels(
+      {
+        aiEndpoint: "https://opencode.ai/inference/go/anthropic",
+        aiApiKey: "oc_sk_test",
+        aiFormat: "anthropic",
+      },
+      fetchImpl,
+    );
+    expect(models).toEqual(["claude-haiku-5-5"]);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://opencode.ai/inference/go/v1/models",
+      expect.objectContaining({
+        method: "GET",
+        headers: {
+          "x-api-key": "oc_sk_test",
+          "anthropic-version": "2023-06-01",
+        },
+      }),
+    );
+  });
+
   it("从 data.id 取出模型名并排序去重", () => {
     expect(
       parseModelIds({
